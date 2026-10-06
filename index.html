@@ -100,6 +100,16 @@ tr:last-child td{border-bottom:0}
 .rel .when span{display:block;color:var(--muted);font-size:.9rem;margin-top:4px}
 .rel .when .left{color:#8A5A00;font-weight:600}
 .rel.late .when b,.rel.late .when .left{color:var(--late)}
+.status{display:flex;flex-wrap:wrap;align-items:center;gap:10px 18px;padding:10px 14px;margin-bottom:22px;border:1px solid var(--line);border-radius:10px;font-size:.95rem;color:var(--muted)}
+.live{display:inline-flex;align-items:center;gap:8px;font-weight:700;color:var(--done)}
+.live.off{color:var(--late)} .live.wait{color:var(--muted)}
+.dot{width:10px;height:10px;border-radius:50%;background:currentColor;position:relative}
+.live:not(.off):not(.wait) .dot::after{content:"";position:absolute;inset:-4px;border-radius:50%;border:2px solid currentColor;opacity:0}
+@media (prefers-reduced-motion:no-preference){.live:not(.off):not(.wait) .dot::after{animation:ping 2s ease-out infinite}}
+@keyframes ping{0%{transform:scale(.6);opacity:.7}100%{transform:scale(1.6);opacity:0}}
+.count{font-variant-numeric:tabular-nums;font-weight:600;color:var(--ink)}
+.status button{margin-left:auto;font:inherit;font-weight:600;background:#fff;color:var(--ink);border:1.5px solid var(--ink);border-radius:6px;padding:4px 12px;cursor:pointer}
+.status .err{flex-basis:100%;color:var(--late);font-size:.9rem}
 footer{margin-top:28px;color:var(--muted);font-size:.85rem}
 
 @media (max-width:860px){
@@ -117,6 +127,13 @@ footer{margin-top:28px;color:var(--muted);font-size:.85rem}
 </head>
 <body>
 <div class="wrap">
+  <div class="status" role="status" aria-live="polite">
+    <span class="live wait" id="live"><span class="dot"></span><span id="liveTxt">Conectando…</span></span>
+    <span>Última atualização: <span class="count" id="last">—</span></span>
+    <span>Próxima atualização em <span class="count" id="count">5:00</span></span>
+    <button type="button" id="refresh">Atualizar agora</button>
+    <span class="err" id="err" hidden></span>
+  </div>
   <header>
     <div>
       <h1>Disponibilidade da frota</h1>
@@ -164,42 +181,143 @@ footer{margin-top:28px;color:var(--muted);font-size:.85rem}
     <tbody id="tbody"></tbody>
   </table></div>
 
-  <footer>Fonte: planilha “Pasta1”, aba 10/2026. Dados copiados em 06/10/2026.</footer>
+  <footer id="foot"></footer>
 </div>
 
 <script>
-// Dados da planilha (aba 10/2026 em diante). Para novos meses, adicione objetos neste array.
-const DATA = [
-  {placa:"MKG1B33", prest:"JS Truck",           ent:"01/10/2026 08:00", prev:"15/10/2026", sai:null},
-  {placa:"EPP6H50", prest:"Wilson Carrocerias", ent:"01/10/2026 14:55", prev:"02/10/2026", sai:"02/10/2026 14:00"},
-  {placa:"FVE9D27", prest:"JS Truck",           ent:"01/10/2026 14:50", prev:"05/10/2026", sai:"05/10/2026 17:20"},
-  {placa:"QHC7F95", prest:"Line Lataria",       ent:"01/10/2026 16:30", prev:"14/10/2026", sai:null},
-  {placa:"EPP6H50", prest:"Borracharia Zancan", ent:"05/10/2026 09:30", prev:"05/10/2026", sai:"05/10/2026 11:30"},
+// ===== Fonte de dados: planilha "Pasta1", abas 10/2026 em diante =====
+const SHEET_ID = "1sJapeeqX3W3XGIz-5Sfxr1olU_9DFNm2eZceQF4bQ0Q";
+const FIRST_TAB = {y:2026, m:10};          // primeira aba lida
+const REFRESH_MS = 5*60*1000;              // 5 minutos
+
+// Cópia de segurança (usada só se a planilha não puder ser lida)
+const FALLBACK = [
+  {placa:"MKG1B33", prest:"JS TRUCK",           ent:"01/10/2026 08:00", prev:"15/10/2026", sai:null},
+  {placa:"EPP6H50", prest:"WILSON CARROCERIAS", ent:"01/10/2026 14:55", prev:"02/10/2026", sai:"02/10/2026 14:00"},
+  {placa:"FVE9D27", prest:"JS TRUCK",           ent:"01/10/2026 14:50", prev:"05/10/2026", sai:"05/10/2026 17:20"},
+  {placa:"QHC7F95", prest:"LINE LATARIA",       ent:"01/10/2026 16:30", prev:"14/10/2026", sai:null},
+  {placa:"EPP6H50", prest:"BORRACHARIA ZANCAN", ent:"05/10/2026 09:30", prev:"05/10/2026", sai:"05/10/2026 11:30"},
 ];
 
 const MESES = ["janeiro","fevereiro","março","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"];
-const parse = s => { if(!s) return null; const [d,t="00:00"]=s.split(" "); const [dd,mm,yy]=d.split("/").map(Number); const [h,mi]=t.split(":").map(Number); return new Date(yy,mm-1,dd,h,mi); };
-const endOfDay = s => { const d=parse(s); d.setHours(23,59,0,0); return d; };
+const parse = s => { if(!s) return null; const [d,t="00:00"]=s.trim().split(/\s+/); const p=d.split("/").map(Number); if(p.length<3||p.some(isNaN)) return null; const [h,mi]=t.split(":").map(Number); const x=new Date(p[2],p[1]-1,p[0],h||0,mi||0); return isNaN(x)?null:x; };
+const endOfDay = s => { const d=parse(s); if(!d) return null; d.setHours(23,59,0,0); return d; };
 const fmtD = d => d ? d.toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"}) : "—";
 const fmtDH = d => d ? fmtD(d)+" "+d.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}) : "—";
 const dur = ms => { const h=Math.round(ms/36e5); if(h<24) return h+" h"; const d=Math.floor(h/24), r=h%24; return d+" d"+(r?" "+r+" h":""); };
 const esc = s => String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const plate = p => `<span class="plate" aria-label="Placa ${esc(p)}"><i></i><em>${esc(p.toUpperCase())}</em></span>`;
+const title = s => s.trim().toLowerCase().replace(/(^|\s)\S/g,c=>c.toUpperCase()).replace(/\bJs\b/,"JS").replace(/\bJc\b/,"JC").replace(/\bAgn\b/,"AGN").replace(/\bAdm\b/,"ADM").replace(/\bAr\b/,"AR").replace(/\bKm\b/,"KM");
 
-const now = new Date();
-const rows = DATA.map(r=>{
-  const ent=parse(r.ent), sai=parse(r.sai), prev=endOfDay(r.prev);
-  let status;
-  if(sai) status = sai<=prev ? "done" : "late";
-  else status = now>prev ? "late" : "open";
-  return {...r, ent, sai, prev, status, open:!sai, ms:(sai||now)-ent};
-});
+let now = new Date();
+let rows = [];
 
-const months = [...new Set(rows.map(r=>r.ent.getFullYear()+"-"+r.ent.getMonth()))].sort();
+function build(list){
+  now = new Date();
+  rows = list.map(r=>{
+    const ent=parse(r.ent), sai=parse(r.sai), prev=endOfDay(r.prev) || (ent && endOfDay(r.ent.split(" ")[0]));
+    let status;
+    if(sai) status = sai<=prev ? "done" : "late";
+    else status = now>prev ? "late" : "open";
+    return {...r, prest:title(r.prest), ent, sai, prev, status, open:!sai, ms:(sai||now)-ent};
+  }).filter(r=>r.ent);
+}
+
+// Leitor de CSV (aceita campos entre aspas)
+function csv(text){
+  const out=[]; let row=[], f="", q=false;
+  for(let i=0;i<text.length;i++){
+    const c=text[i];
+    if(q){ if(c==='"'){ if(text[i+1]==='"'){f+='"';i++;} else q=false; } else f+=c; }
+    else if(c==='"') q=true;
+    else if(c===','){ row.push(f); f=""; }
+    else if(c==='\n'){ row.push(f); out.push(row); row=[]; f=""; }
+    else if(c!=='\r') f+=c;
+  }
+  if(f||row.length){ row.push(f); out.push(row); }
+  return out;
+}
+
+async function loadTab(y,m){
+  const tab = String(m).padStart(2,"0")+"/"+y;
+  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&headers=1&sheet=${encodeURIComponent(tab)}&t=${Date.now()}`;
+  const res = await fetch(url,{cache:"no-store"});
+  if(!res.ok) throw new Error("HTTP "+res.status);
+  const txt = await res.text();
+  if(/^\s*</.test(txt)) throw new Error("sem acesso");          // página de login = planilha privada
+  const t = csv(txt); if(!t.length) return [];
+  const H = t[0].map(x=>x.toUpperCase());
+  const col = k => H.findIndex(x=>x.includes(k));
+  const c = {placa:col("PLACA"),prest:col("PRESTADOR"),de:col("DATA DE ENTRADA"),he:col("HORA DA ENTRADA"),pv:col("PREVIS"),ds:col("DATA DA SA"),hs:col("HORA DA SA")};
+  if(c.placa<0||c.de<0) return [];
+  const list = t.slice(1).filter(r=>(r[c.placa]||"").trim() && (r[c.de]||"").trim()).map(r=>({
+    placa:r[c.placa].trim(),
+    prest:(r[c.prest]||"").trim(),
+    ent:(r[c.de]+" "+(r[c.he]||"")).trim(),
+    prev:c.pv>=0 ? (r[c.pv]||"").trim() : "",
+    sai:(r[c.ds]||"").trim() ? (r[c.ds]+" "+(r[c.hs]||"")).trim() : null,
+  }));
+  // Se a aba não existe, o Google devolve a primeira aba: descarta se as datas não forem do mês
+  const ok = list.filter(r=>{ const d=parse(r.ent); return d && d.getFullYear()===y && d.getMonth()===m-1; }).length;
+  return ok >= list.length/2 ? list : [];
+}
+
+async function loadAll(){
+  const today = new Date(); const tabs=[];
+  for(let y=FIRST_TAB.y, m=FIRST_TAB.m; y<today.getFullYear() || (y===today.getFullYear() && m<=today.getMonth()+1); m===12?(y++,m=1):m++) tabs.push([y,m]);
+  const parts = await Promise.all(tabs.map(([y,m])=>loadTab(y,m)));
+  return parts.flat();
+}
+
 const sel = document.getElementById("month");
-months.forEach(k=>{ const [y,m]=k.split("-").map(Number); const o=document.createElement("option"); o.value=k; o.textContent=MESES[m][0].toUpperCase()+MESES[m].slice(1)+" "+y; sel.appendChild(o); });
-sel.value = months[months.length-1];
 sel.addEventListener("change", render);
+function fillMonths(){
+  const keep = sel.value;
+  const months = [...new Set(rows.map(r=>r.ent.getFullYear()+"-"+String(r.ent.getMonth()).padStart(2,"0")))].sort();
+  sel.innerHTML = "";
+  months.forEach(k=>{ const [y,m]=k.split("-").map(Number); const o=document.createElement("option"); o.value=y+"-"+m; o.textContent=MESES[m][0].toUpperCase()+MESES[m].slice(1)+" "+y; sel.appendChild(o); });
+  const vals=[...sel.options].map(o=>o.value);
+  sel.value = vals.includes(keep) ? keep : vals[vals.length-1];
+}
+
+// ===== Status online + contagem regressiva =====
+const $ = id => document.getElementById(id);
+let nextAt = Date.now()+REFRESH_MS, loading=false, online=false;
+function setLive(state,text){ $("live").className="live "+state; $("liveTxt").textContent=text; }
+
+async function refresh(){
+  if(loading) return; loading=true;
+  setLive("wait","Atualizando…");
+  try{
+    const list = await loadAll();
+    if(!list.length) throw new Error("planilha sem dados");
+    build(list); online=true;
+    setLive("","Online");
+    $("err").hidden=true;
+    $("foot").textContent = "Fonte: planilha “Pasta1”, abas de 10/2026 em diante, lida diretamente do Google Sheets.";
+  }catch(e){
+    online=false;
+    if(!rows.length) build(FALLBACK);
+    setLive("off","Offline");
+    $("err").hidden=false;
+    $("err").textContent = navigator.onLine
+      ? "Não foi possível ler a planilha. Verifique se ela está compartilhada como “Qualquer pessoa com o link: Leitor”. Mostrando os últimos dados disponíveis."
+      : "Sem conexão com a internet. Mostrando os últimos dados disponíveis.";
+    $("foot").textContent = "Fonte: planilha “Pasta1”, abas de 10/2026 em diante (cópia salva).";
+  }
+  $("last").textContent = new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit",second:"2-digit"});
+  fillMonths(); render();
+  nextAt = Date.now()+REFRESH_MS; loading=false;
+}
+
+setInterval(()=>{
+  const s=Math.max(0,Math.ceil((nextAt-Date.now())/1000));
+  $("count").textContent = Math.floor(s/60)+":"+String(s%60).padStart(2,"0");
+  if(s===0) refresh();
+},1000);
+$("refresh").addEventListener("click", refresh);
+window.addEventListener("offline",()=>setLive("off","Offline"));
+window.addEventListener("online",refresh);
 
 function render(){
   const [y,m]=sel.value.split("-").map(Number);
@@ -285,7 +403,7 @@ function render(){
     <td>${r.sai?fmtDH(r.sai):"—"}</td><td>${dur(r.ms)}${r.open?" até agora":""}</td>
     <td><span class="tag ${r.status}">${label[r.status]}</span></td></tr>`).join("");
 }
-render();
+refresh();
 </script>
 </body>
 </html>
