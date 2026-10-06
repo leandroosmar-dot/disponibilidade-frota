@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Disponibilidade da frota — outubro 2026</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#FFFFFF; --ink:#18202C; --muted:#5E6878; --line:#E2E6EB; --soft:#F5F7F9;
+  --open:#E39B12; --done:#13706B; --late:#C4362B; --plate:#1E4FA3;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+html{scroll-padding-top:env(safe-area-inset-top,0px);}
+*,*::before,*::after{box-sizing:inherit}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Barlow",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:16px;line-height:1.45}
+.wrap{max-width:1180px;margin:0 auto;padding:32px 24px 56px}
+header{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:16px;border-bottom:3px solid var(--ink);padding-bottom:18px}
+h1{font-family:"Barlow Condensed","Arial Narrow",sans-serif;font-weight:700;font-size:clamp(2rem,4.5vw,3rem);line-height:1;margin:0;letter-spacing:-.01em}
+.sub{color:var(--muted);margin-top:6px}
+select{font:inherit;font-weight:600;color:var(--ink);background:#fff;border:1.5px solid var(--ink);border-radius:6px;padding:8px 12px}
+select:focus-visible,button:focus-visible{outline:3px solid var(--plate);outline-offset:2px}
+
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);margin:28px 0 8px;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.kpi{padding:18px 20px;border-right:1px solid var(--line)}
+.kpi:last-child{border-right:0}
+.kpi b{display:block;font-family:"Barlow Condensed","Arial Narrow",sans-serif;font-size:2.6rem;line-height:1;font-weight:700}
+.kpi span{color:var(--muted);font-size:.95rem}
+.kpi.open b{color:var(--open)} .kpi.done b{color:var(--done)}
+
+h2{font-family:"Barlow Condensed","Arial Narrow",sans-serif;font-size:1.6rem;font-weight:600;margin:40px 0 4px}
+.note{color:var(--muted);margin:0 0 16px;font-size:.95rem}
+
+/* placa Mercosul */
+.plate{display:inline-flex;flex-direction:column;min-width:92px;border:1.5px solid var(--ink);border-radius:4px;overflow:hidden;background:#fff;vertical-align:middle}
+.plate i{display:block;height:6px;background:var(--plate)}
+.plate em{font-style:normal;font-family:"Barlow Condensed","Arial Narrow",sans-serif;font-weight:700;font-size:1.1rem;letter-spacing:.06em;text-align:center;padding:1px 8px 2px}
+
+/* linha do tempo */
+.gantt-scroll{overflow-x:auto;border:1px solid var(--line);border-radius:10px}
+.gantt{min-width:760px;position:relative}
+.g-head,.g-row{display:grid;grid-template-columns:230px 1fr}
+.g-head{border-bottom:1px solid var(--line);background:var(--soft)}
+.g-head .lab{padding:8px 14px;font-weight:600;color:var(--muted);font-size:.85rem}
+.days{display:grid;position:relative}
+.days span{font-size:.8rem;color:var(--muted);text-align:center;padding:8px 0;border-left:1px solid var(--line)}
+.days span.today{color:var(--late);font-weight:700}
+.g-row{border-bottom:1px solid var(--line)}
+.g-row:last-child{border-bottom:0}
+.g-row .lab{padding:10px 14px;display:flex;align-items:center;gap:10px}
+.g-row .lab small{color:var(--muted);font-size:.85rem;line-height:1.2}
+.track{position:relative;min-height:54px;background-image:linear-gradient(to right,var(--line) 1px,transparent 1px)}
+.bar{position:absolute;top:50%;transform:translateY(-50%);height:18px;border-radius:9px;min-width:6px}
+.bar.done{background:var(--done)}
+.bar.open{background:var(--open)}
+.bar.late{background:var(--late)}
+.fc{position:absolute;top:50%;transform:translateY(-50%);height:18px;border:2px dashed var(--open);border-left:0;border-radius:0 9px 9px 0}
+.todayline{position:absolute;top:0;bottom:0;width:2px;background:var(--late);opacity:.75;pointer-events:none}
+.legend{display:flex;flex-wrap:wrap;gap:18px;margin-top:12px;color:var(--muted);font-size:.9rem}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.sw{width:22px;height:10px;border-radius:5px;display:inline-block}
+
+.cols{display:grid;grid-template-columns:1.1fr 1fr;gap:32px}
+.prov{display:grid;gap:12px}
+.prov-row{display:grid;grid-template-columns:170px 1fr 48px;align-items:center;gap:12px}
+.prov-row .name{font-weight:600}
+.prov-row .meter{height:14px;background:var(--soft);border-radius:7px;overflow:hidden;display:flex}
+.prov-row .meter div{height:100%}
+.prov-row .n{font-family:"Barlow Condensed","Arial Narrow",sans-serif;font-weight:700;font-size:1.2rem;text-align:right}
+
+.inshop{display:grid;gap:12px}
+.card{border:1.5px solid var(--line);border-left:6px solid var(--open);border-radius:8px;padding:14px 16px;display:grid;grid-template-columns:auto 1fr;gap:14px;align-items:center}
+.card.late{border-left-color:var(--late)}
+.card h3{margin:0;font-size:1.05rem}
+.card p{margin:2px 0 0;color:var(--muted);font-size:.92rem}
+.prog{height:6px;background:var(--soft);border-radius:3px;margin-top:8px;overflow:hidden}
+.prog div{height:100%;background:var(--open)}
+.card.late .prog div{background:var(--late)}
+.empty{color:var(--muted);padding:16px;border:1.5px dashed var(--line);border-radius:8px}
+
+.tbl-scroll{overflow-x:auto;border:1px solid var(--line);border-radius:10px}
+table{width:100%;border-collapse:collapse;min-width:820px;font-size:.95rem}
+th{text-align:left;font-weight:600;color:var(--muted);background:var(--soft);padding:10px 14px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:10px 14px;border-bottom:1px solid var(--line);white-space:nowrap}
+tr:last-child td{border-bottom:0}
+.tag{display:inline-block;font-weight:600;font-size:.85rem;padding:2px 10px;border-radius:12px}
+.tag.done{background:#E3F1F0;color:var(--done)}
+.tag.open{background:#FCF1DC;color:#8A5A00}
+.tag.late{background:#F8E2E0;color:var(--late)}
+.release{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px}
+.rel{border:1.5px solid var(--ink);border-radius:10px;display:grid;grid-template-columns:1fr auto;align-items:center;gap:16px;padding:16px 18px}
+.rel.late{border-color:var(--late)}
+.rel .who{display:grid;gap:6px}
+.rel .who small{color:var(--muted);font-size:.95rem}
+.rel .when{text-align:right}
+.rel .when b{display:block;font-family:"Barlow Condensed","Arial Narrow",sans-serif;font-weight:700;font-size:2.4rem;line-height:1;color:var(--ink)}
+.rel .when span{display:block;color:var(--muted);font-size:.9rem;margin-top:4px}
+.rel .when .left{color:#8A5A00;font-weight:600}
+.rel.late .when b,.rel.late .when .left{color:var(--late)}
+footer{margin-top:28px;color:var(--muted);font-size:.85rem}
+
+@media (max-width:860px){
+  .kpis{grid-template-columns:repeat(2,1fr)}
+  .kpi:nth-child(2){border-right:0}
+  .kpi:nth-child(-n+2){border-bottom:1px solid var(--line)}
+  .cols{grid-template-columns:1fr}
+  .prov-row{grid-template-columns:130px 1fr 40px}
+}
+@media (prefers-reduced-motion:no-preference){
+  .bar{animation:grow .6s ease-out both;transform-origin:left center}
+  @keyframes grow{from{clip-path:inset(0 100% 0 0)}to{clip-path:inset(0 0 0 0)}}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Disponibilidade da frota</h1>
+      <div class="sub" id="sub"></div>
+    </div>
+    <label>
+      <span class="sr" style="position:absolute;left:-9999px">Mês</span>
+      <select id="month" aria-label="Mês"></select>
+    </label>
+  </header>
+
+  <section class="kpis" id="kpis"></section>
+
+  <h2>Previsão de liberação</h2>
+  <p class="note">Veículos que ainda estão em manutenção e a data prevista para saírem do prestador.</p>
+  <div class="release" id="release"></div>
+
+  <h2>Linha do tempo das passagens</h2>
+  <p class="note">Cada barra vai da entrada até a saída do veículo no prestador. Para quem ainda está na oficina, o tracejado mostra o que falta até a previsão de liberação.</p>
+  <div class="gantt-scroll"><div class="gantt" id="gantt"></div></div>
+  <div class="legend">
+    <span><i class="sw" style="background:var(--done)"></i>Concluída</span>
+    <span><i class="sw" style="background:var(--open)"></i>Na oficina</span>
+    <span><i class="sw" style="border:2px dashed var(--open)"></i>Até a previsão</span>
+    <span><i class="sw" style="background:var(--late)"></i>Atrasada</span>
+    <span><i class="sw" style="width:2px;height:14px;background:var(--late)"></i>Hoje</span>
+  </div>
+
+  <div class="cols">
+    <div>
+      <h2>Passagens por prestador</h2>
+      <p class="note">Quantidade de entradas no mês, separando concluídas e em andamento.</p>
+      <div class="prov" id="prov"></div>
+    </div>
+    <div>
+      <h2>Na oficina agora</h2>
+      <p class="note">Dias parados e quanto falta para a previsão de liberação.</p>
+      <div class="inshop" id="inshop"></div>
+    </div>
+  </div>
+
+  <h2>Todas as passagens</h2>
+  <div class="tbl-scroll"><table>
+    <thead><tr><th>Placa</th><th>Prestador</th><th>Entrada</th><th>Previsão</th><th>Saída</th><th>Tempo na oficina</th><th>Situação</th></tr></thead>
+    <tbody id="tbody"></tbody>
+  </table></div>
+
+  <footer>Fonte: planilha “Pasta1”, aba 10/2026. Dados copiados em 06/10/2026.</footer>
+</div>
+
+<script>
+// Dados da planilha (aba 10/2026 em diante). Para novos meses, adicione objetos neste array.
+const DATA = [
+  {placa:"MKG1B33", prest:"JS Truck",           ent:"01/10/2026 08:00", prev:"15/10/2026", sai:null},
+  {placa:"EPP6H50", prest:"Wilson Carrocerias", ent:"01/10/2026 14:55", prev:"02/10/2026", sai:"02/10/2026 14:00"},
+  {placa:"FVE9D27", prest:"JS Truck",           ent:"01/10/2026 14:50", prev:"05/10/2026", sai:"05/10/2026 17:20"},
+  {placa:"QHC7F95", prest:"Line Lataria",       ent:"01/10/2026 16:30", prev:"14/10/2026", sai:null},
+  {placa:"EPP6H50", prest:"Borracharia Zancan", ent:"05/10/2026 09:30", prev:"05/10/2026", sai:"05/10/2026 11:30"},
+];
+
+const MESES = ["janeiro","fevereiro","março","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"];
+const parse = s => { if(!s) return null; const [d,t="00:00"]=s.split(" "); const [dd,mm,yy]=d.split("/").map(Number); const [h,mi]=t.split(":").map(Number); return new Date(yy,mm-1,dd,h,mi); };
+const endOfDay = s => { const d=parse(s); d.setHours(23,59,0,0); return d; };
+const fmtD = d => d ? d.toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"}) : "—";
+const fmtDH = d => d ? fmtD(d)+" "+d.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}) : "—";
+const dur = ms => { const h=Math.round(ms/36e5); if(h<24) return h+" h"; const d=Math.floor(h/24), r=h%24; return d+" d"+(r?" "+r+" h":""); };
+const esc = s => String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const plate = p => `<span class="plate" aria-label="Placa ${esc(p)}"><i></i><em>${esc(p.toUpperCase())}</em></span>`;
+
+const now = new Date();
+const rows = DATA.map(r=>{
+  const ent=parse(r.ent), sai=parse(r.sai), prev=endOfDay(r.prev);
+  let status;
+  if(sai) status = sai<=prev ? "done" : "late";
+  else status = now>prev ? "late" : "open";
+  return {...r, ent, sai, prev, status, open:!sai, ms:(sai||now)-ent};
+});
+
+const months = [...new Set(rows.map(r=>r.ent.getFullYear()+"-"+r.ent.getMonth()))].sort();
+const sel = document.getElementById("month");
+months.forEach(k=>{ const [y,m]=k.split("-").map(Number); const o=document.createElement("option"); o.value=k; o.textContent=MESES[m][0].toUpperCase()+MESES[m].slice(1)+" "+y; sel.appendChild(o); });
+sel.value = months[months.length-1];
+sel.addEventListener("change", render);
+
+function render(){
+  const [y,m]=sel.value.split("-").map(Number);
+  const list = rows.filter(r=>r.ent.getFullYear()===y && r.ent.getMonth()===m).sort((a,b)=>a.ent-b.ent);
+  document.title = `Disponibilidade da frota — ${MESES[m]} ${y}`;
+  document.getElementById("sub").textContent = `${MESES[m][0].toUpperCase()+MESES[m].slice(1)} de ${y} · ${list.length} passagens em oficina`;
+
+  // KPIs
+  const open=list.filter(r=>r.open), closed=list.filter(r=>!r.open);
+  const avg = closed.length ? closed.reduce((s,r)=>s+r.ms,0)/closed.length : 0;
+  const onTime = closed.filter(r=>r.status==="done").length;
+  const vehicles = new Set(list.map(r=>r.placa.toUpperCase())).size;
+  document.getElementById("kpis").innerHTML = `
+    <div class="kpi open"><b>${open.length}</b><span>veículos na oficina agora</span></div>
+    <div class="kpi done"><b>${closed.length}</b><span>passagens concluídas</span></div>
+    <div class="kpi"><b>${closed.length?dur(avg):"—"}</b><span>tempo médio por passagem concluída</span></div>
+    <div class="kpi"><b>${closed.length?onTime+"/"+closed.length:"—"}</b><span>liberadas dentro da previsão · ${vehicles} veículos no mês</span></div>`;
+
+  // Previsão de liberação
+  const DIAS = ["domingo","segunda","terça","quarta","quinta","sexta","sábado"];
+  document.getElementById("release").innerHTML = open.length ? [...open].sort((a,b)=>a.prev-b.prev).map(r=>{
+    const today0 = new Date(now.getFullYear(),now.getMonth(),now.getDate());
+    const prev0 = new Date(r.prev.getFullYear(),r.prev.getMonth(),r.prev.getDate());
+    const left = Math.round((prev0-today0)/864e5);
+    const msg = left>1 ? `faltam ${left} dias` : left===1 ? "amanhã" : left===0 ? "hoje" : `atrasado ${-left} ${-left===1?"dia":"dias"}`;
+    return `<div class="rel ${r.status==="late"?"late":""}">
+      <div class="who">${plate(r.placa)}<small>${esc(r.prest)} · em manutenção desde ${fmtD(r.ent)}</small></div>
+      <div class="when"><b>${fmtD(r.prev)}</b><span>${DIAS[r.prev.getDay()]}</span><span class="left">${msg}</span></div>
+    </div>`;
+  }).join("") : `<div class="empty">Nenhum veículo em manutenção no momento.</div>`;
+
+  // Linha do tempo
+  const start = new Date(y,m,1);
+  const lastNeeded = Math.max(...list.map(r=>Math.max(r.prev, r.sai||0, r.open?now:0)));
+  const monthEnd = new Date(y,m+1,0,23,59);
+  const end = new Date(Math.min(lastNeeded, monthEnd)); end.setHours(23,59,59,0);
+  const nDays = Math.max(7, Math.round((end-start)/864e5));
+  const span = nDays*864e5;
+  const pct = d => Math.max(0,Math.min(100,(d-start)/span*100));
+  const todayIdx = (now.getFullYear()===y && now.getMonth()===m) ? now.getDate() : -1;
+  let html = `<div class="g-head"><div class="lab">Veículo e prestador</div><div class="days" style="grid-template-columns:repeat(${nDays},1fr)">`;
+  for(let i=1;i<=nDays;i++) html += `<span class="${i===todayIdx?"today":""}">${String(i).padStart(2,"0")}</span>`;
+  html += `</div></div>`;
+  list.forEach(r=>{
+    const a=pct(r.ent), b=pct(r.sai||now);
+    const fcEnd = pct(r.prev);
+    html += `<div class="g-row"><div class="lab">${plate(r.placa)}<small>${esc(r.prest)}</small></div>
+      <div class="track" style="background-size:calc(100%/${nDays}) 100%">
+        ${r.open && r.status==="open" && fcEnd>b ? `<div class="fc" style="left:${b}%;width:${fcEnd-b}%"></div>`:""}
+        <div class="bar ${r.status}" style="left:${a}%;width:${Math.max(b-a,.6)}%" title="${esc(r.placa)} · ${fmtDH(r.ent)} → ${r.sai?fmtDH(r.sai):"em andamento"}"></div>
+      </div></div>`;
+  });
+  if(todayIdx>0 && now<=end) html += `<div class="todayline" style="left:calc(230px + (100% - 230px) * ${pct(now)/100})"></div>`;
+  document.getElementById("gantt").innerHTML = html;
+
+  // Prestadores
+  const byP = {};
+  list.forEach(r=>{ const k=r.prest; byP[k]=byP[k]||{done:0,open:0,late:0}; byP[k][r.status]++; });
+  const max = Math.max(...Object.values(byP).map(v=>v.done+v.open+v.late));
+  document.getElementById("prov").innerHTML = Object.entries(byP)
+    .sort((a,b)=>(b[1].done+b[1].open+b[1].late)-(a[1].done+a[1].open+a[1].late))
+    .map(([k,v])=>{ const t=v.done+v.open+v.late; return `<div class="prov-row"><span class="name">${esc(k)}</span>
+      <div class="meter" style="width:${t/max*100}%" role="img" aria-label="${t} passagens">
+        <div style="flex:${v.done};background:var(--done)"></div><div style="flex:${v.open};background:var(--open)"></div><div style="flex:${v.late};background:var(--late)"></div>
+      </div><span class="n">${t}</span></div>`; }).join("");
+
+  // Na oficina
+  const shop = document.getElementById("inshop");
+  shop.innerHTML = open.length ? open.map(r=>{
+    const total = r.prev - r.ent, gone = now - r.ent;
+    const days = Math.floor(gone/864e5);
+    const left = Math.ceil((r.prev-now)/864e5);
+    const msg = left>=0 ? `faltam ${left} ${left===1?"dia":"dias"} para a previsão (${fmtD(r.prev)})` : `previsão era ${fmtD(r.prev)}, atrasado ${-left} ${-left===1?"dia":"dias"}`;
+    return `<div class="card ${r.status==="late"?"late":""}">${plate(r.placa)}
+      <div><h3>${esc(r.prest)}</h3><p>Entrou em ${fmtDH(r.ent)} · ${days} ${days===1?"dia":"dias"} parado</p><p>${msg}</p>
+      <div class="prog"><div style="width:${Math.min(100,gone/total*100)}%"></div></div></div></div>`;
+  }).join("") : `<div class="empty">Nenhum veículo na oficina neste mês.</div>`;
+
+  // Tabela
+  const label = {done:"Concluída",open:"Na oficina",late:"Atrasada"};
+  document.getElementById("tbody").innerHTML = list.map(r=>`<tr>
+    <td>${plate(r.placa)}</td><td>${esc(r.prest)}</td><td>${fmtDH(r.ent)}</td><td>${fmtD(r.prev)}</td>
+    <td>${r.sai?fmtDH(r.sai):"—"}</td><td>${dur(r.ms)}${r.open?" até agora":""}</td>
+    <td><span class="tag ${r.status}">${label[r.status]}</span></td></tr>`).join("");
+}
+render();
+</script>
+</body>
+</html>
